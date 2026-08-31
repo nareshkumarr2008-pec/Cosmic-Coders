@@ -1,21 +1,8 @@
-"""
-Web API for the lunar image registration pipeline.
-
-Wraps the existing CLI pipeline (run_pipeline.py / matchers / utils) in a
-small Flask app so the same preprocessing -> matching -> refinement ->
-spatial-uniformity -> registration -> evaluation stages can be driven
-from a browser instead of the command line, with every intermediate
-artifact (match visualization, checkerboard, diff map, coverage heatmap)
-returned as an image the frontend can render directly.
-
-No pipeline logic lives in this file — it only orchestrates calls into
-matchers/ and utils/, exactly as run_pipeline.py does, then serializes
-results to JSON.
-"""
 from __future__ import annotations
 
 import base64
 import io
+import os
 import time
 import traceback
 
@@ -36,7 +23,7 @@ from utils.visualize import draw_matches, heatmap_overlay, side_by_side
 
 app = Flask(__name__, static_folder="webapp/static", static_url_path="/static")
 
-MAX_DIM = 1600  # guard rail so a huge upload doesn't stall a demo
+MAX_DIM = 1600
 
 MATCHER_REGISTRY = {
     "sift": lambda: SIFTMatcher(),
@@ -213,7 +200,7 @@ def run():
                 reports.append(
                     run_one_matcher(name, norm1, norm2, orig1, orig2, grid_size, max_per_tile, gsd)
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 reports.append({
                     "matcher": name,
                     "label": MATCHER_LABELS.get(name, name),
@@ -239,15 +226,10 @@ def run():
             "matcher_availability": matcher_availability(),
         })
 
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    # debug=False by default: this is a hackathon prototype server, not a
-    # production deployment. Set FLASK_DEBUG=1 in your shell if you want
-    # the auto-reloader while editing the frontend.
-    import os
-
     app.run(host="0.0.0.0", port=5050, debug=bool(os.environ.get("FLASK_DEBUG")))
