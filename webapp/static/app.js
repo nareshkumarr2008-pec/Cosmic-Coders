@@ -44,6 +44,7 @@ async function init() {
 
 function setEnvStatus(ok) {
   const el = document.getElementById("env-status");
+  if (!el) return;
   if (ok) {
     el.textContent = "backend connected";
     el.className = "pill pill-ok";
@@ -56,7 +57,9 @@ function setEnvStatus(ok) {
 function wireSlider(id, outId) {
   const input = document.getElementById(id);
   const out = document.getElementById(outId);
-  input.addEventListener("input", () => (out.textContent = input.value));
+  if (input && out) {
+    input.addEventListener("input", () => (out.textContent = input.value));
+  }
 }
 
 // ---------------------------------------------------------------- uploads
@@ -65,6 +68,8 @@ function wireDropzone(zoneId, inputId, previewId, slot) {
   const zone = document.getElementById(zoneId);
   const input = document.getElementById(inputId);
   const preview = document.getElementById(previewId);
+
+  if (!zone || !input || !preview) return;
 
   zone.addEventListener("click", () => input.click());
   input.addEventListener("change", () => {
@@ -93,7 +98,8 @@ function handleFile(file, zone, preview, slot) {
   const url = URL.createObjectURL(file);
   preview.src = url;
   zone.classList.add("filled");
-  zone.querySelector(".dropzone-hint").textContent = file.name;
+  const hint = zone.querySelector(".dropzone-hint");
+  if (hint) hint.textContent = file.name;
   setNote("");
 }
 
@@ -125,6 +131,7 @@ async function useSamplePair() {
 
 function renderMatcherList() {
   const list = document.getElementById("matcher-list");
+  if (!list) return;
   list.innerHTML = "";
   const order = ["sift", "loftr", "rift", "all"];
 
@@ -154,6 +161,7 @@ function renderMatcherList() {
 
 function setNote(text, isError = false) {
   const el = document.getElementById("run-note");
+  if (!el) return;
   el.textContent = text;
   el.className = "rail-note" + (isError ? " error" : "");
 }
@@ -167,7 +175,8 @@ async function runPipeline() {
 
   const btn = document.getElementById("btn-run");
   btn.disabled = true;
-  btn.querySelector(".run-btn-label").textContent = "Running…";
+  const btnLabel = btn.querySelector(".run-btn-label");
+  if (btnLabel) btnLabel.textContent = "Running…";
   setNote("preprocessing → matching → refining → registering → scoring");
 
   const form = new FormData();
@@ -181,7 +190,11 @@ async function runPipeline() {
   form.append("grid_rows", document.getElementById("grid-rows").value);
   form.append("grid_cols", document.getElementById("grid-cols").value);
   form.append("max_per_tile", document.getElementById("max-per-tile").value);
-  form.append("gsd", document.getElementById("gsd").value);
+
+  const gsdEl = document.getElementById("gsd");
+  if (gsdEl && gsdEl.value) {
+    form.append("gsd", gsdEl.value);
+  }
 
   try {
     const res = await fetch("/api/run", { method: "POST", body: form });
@@ -198,7 +211,7 @@ async function runPipeline() {
     setNote(e.message, true);
   } finally {
     btn.disabled = false;
-    btn.querySelector(".run-btn-label").textContent = "Run pipeline";
+    if (btnLabel) btnLabel.textContent = "Run pipeline";
   }
 }
 
@@ -214,31 +227,34 @@ function render() {
   const body = document.getElementById("viewport-body");
   const tabsEl = document.getElementById("matcher-tabs");
 
+  if (!body) return;
+
   if (!state.result) {
-    tabsEl.hidden = true;
-    return; // keep empty state markup
+    if (tabsEl) tabsEl.hidden = true;
+    return;
   }
 
   const reports = state.result.reports;
   const multi = reports.length > 1;
-  tabsEl.hidden = !multi;
-  if (multi) {
-    tabsEl.innerHTML = "";
-    reports.forEach((r) => {
-      const tab = document.createElement("button");
-      tab.className = "stage-tab" + (r.matcher === state.activeMatcherTab ? " active" : "");
-      tab.textContent = `${r.label || r.matcher}${r.status !== "ok" ? " (" + r.status + ")" : ""}`;
-      tab.addEventListener("click", () => {
-        state.activeMatcherTab = r.matcher;
-        render();
+  if (tabsEl) {
+    tabsEl.hidden = !multi;
+    if (multi) {
+      tabsEl.innerHTML = "";
+      reports.forEach((r) => {
+        const tab = document.createElement("button");
+        tab.className = "stage-tab" + (r.matcher === state.activeMatcherTab ? " active" : "");
+        tab.textContent = `${r.label || r.matcher}${r.status !== "ok" ? " (" + r.status + ")" : ""}`;
+        tab.addEventListener("click", () => {
+          state.activeMatcherTab = r.matcher;
+          render();
+        });
+        tabsEl.appendChild(tab);
       });
-      tabsEl.appendChild(tab);
-    });
+    }
   }
 
   const report = reports.find((r) => r.matcher === state.activeMatcherTab) || reports[0];
 
-  if (state.stage === "preprocess") body.innerHTML = "";
   body.innerHTML = "";
 
   if (state.stage === "preprocess") return renderPreprocess(body);
@@ -277,6 +293,8 @@ function sectionTitle(text, small = "") {
 
 function renderPreprocess(body) {
   const pre = state.result.preprocessing;
+  if (!pre) return;
+
   const block = document.createElement("div");
   block.className = "section-block";
   block.appendChild(sectionTitle("Illumination normalization", "CLAHE, applied independently per frame"));
@@ -297,6 +315,8 @@ function renderPreprocess(body) {
 }
 
 function renderMatch(body, report) {
+  if (!report.images) return;
+
   const readouts = document.createElement("div");
   readouts.className = "readout-row";
   readouts.appendChild(readout("raw matches", report.raw_match_count));
@@ -304,35 +324,43 @@ function renderMatch(body, report) {
   readouts.appendChild(readout("inlier ratio", report.inlier_ratio));
   body.appendChild(readouts);
 
-  const block = document.createElement("div");
-  block.className = "section-block";
-  block.appendChild(sectionTitle("Raw correspondences", `${report.label || report.matcher}, before outlier rejection`));
-  block.appendChild(imageCard(report.images.raw_matches, "reference (left) ↔ target (right) — all candidate matches", true));
-  body.appendChild(block);
+  if (report.images.raw_matches) {
+    const block = document.createElement("div");
+    block.className = "section-block";
+    block.appendChild(sectionTitle("Raw correspondences", `${report.label || report.matcher}, before outlier rejection`));
+    block.appendChild(imageCard(report.images.raw_matches, "reference (left) ↔ target (right) — all candidate matches", true));
+    body.appendChild(block);
+  }
 
-  const block2 = document.createElement("div");
-  block2.className = "section-block";
-  block2.appendChild(sectionTitle("After refinement + spatial capping", "MAGSAC++/RANSAC inliers, sub-pixel refined, grid-capped"));
-  block2.appendChild(imageCard(report.images.inlier_matches, "surviving correspondences used for the final homography", true));
-  body.appendChild(block2);
+  if (report.images.inlier_matches) {
+    const block2 = document.createElement("div");
+    block2.className = "section-block";
+    block2.appendChild(sectionTitle("After refinement + spatial capping", "MAGSAC++/RANSAC inliers, sub-pixel refined, grid-capped"));
+    block2.appendChild(imageCard(report.images.inlier_matches, "surviving correspondences used for the final homography", true));
+    body.appendChild(block2);
+  }
 }
 
 function renderRegister(body, report) {
+  if (!report.images) return;
+
   const block = document.createElement("div");
   block.className = "section-block";
   block.appendChild(sectionTitle("Registered output", `${report.label || report.matcher} → warped into reference frame`));
   const grid = document.createElement("div");
   grid.className = "image-grid";
-  grid.appendChild(imageCard(report.images.registered, "target warped into reference frame"));
-  grid.appendChild(imageCard(report.images.checkerboard, "checkerboard overlay — QA for local misalignment"));
+  if (report.images.registered) grid.appendChild(imageCard(report.images.registered, "target warped into reference frame"));
+  if (report.images.checkerboard) grid.appendChild(imageCard(report.images.checkerboard, "checkerboard overlay — QA for local misalignment"));
   block.appendChild(grid);
   body.appendChild(block);
 
-  const block2 = document.createElement("div");
-  block2.className = "section-block";
-  block2.appendChild(sectionTitle("Difference map", "absolute pixel difference, reference vs. registered target"));
-  block2.appendChild(imageCard(report.images.diffmap, "warmer = larger residual", true));
-  body.appendChild(block2);
+  if (report.images.diffmap) {
+    const block2 = document.createElement("div");
+    block2.className = "section-block";
+    block2.appendChild(sectionTitle("Difference map", "absolute pixel difference, reference vs. registered target"));
+    block2.appendChild(imageCard(report.images.diffmap, "warmer = larger residual", true));
+    body.appendChild(block2);
+  }
 }
 
 function renderMetrics(body, report, reports) {
@@ -342,18 +370,22 @@ function renderMetrics(body, report, reports) {
   readouts.appendChild(readout("mean error (px)", report.mean_error_px));
   readouts.appendChild(readout("max error (px)", report.max_error_px));
   readouts.appendChild(readout("inlier ratio", report.inlier_ratio, "accent"));
-  readouts.appendChild(readout("coverage", report.spatial_distribution.coverage_pct + "%", "accent"));
-  readouts.appendChild(readout("tile count std", report.spatial_distribution.count_std));
+  if (report.spatial_distribution) {
+    readouts.appendChild(readout("coverage", report.spatial_distribution.coverage_pct + "%", "accent"));
+    readouts.appendChild(readout("tile count std", report.spatial_distribution.count_std));
+  }
   if (report.rmse_ground_m !== undefined) {
     readouts.appendChild(readout("RMSE (ground, m)", report.rmse_ground_m, "warn"));
   }
   body.appendChild(readouts);
 
-  const block = document.createElement("div");
-  block.className = "section-block";
-  block.appendChild(sectionTitle("Spatial coverage", `${report.spatial_distribution.grid_size.join(" × ")} grid, matches per tile`));
-  block.appendChild(imageCard(report.images.coverage_heatmap, "brighter tile = more retained matches in that region", true));
-  body.appendChild(block);
+  if (report.spatial_distribution && report.images?.coverage_heatmap) {
+    const block = document.createElement("div");
+    block.className = "section-block";
+    block.appendChild(sectionTitle("Spatial coverage", `${report.spatial_distribution.grid_size.join(" × ")} grid, matches per tile`));
+    block.appendChild(imageCard(report.images.coverage_heatmap, "brighter tile = more retained matches in that region", true));
+    body.appendChild(block);
+  }
 
   const okReports = reports.filter((r) => r.status === "ok");
   if (okReports.length > 1) {
@@ -374,7 +406,7 @@ function bakeoffTable(ranking, reports) {
     </tr></thead>
   `;
   const tbody = document.createElement("tbody");
-  const order = ranking.length ? ranking : reports.map((r) => r.matcher);
+  const order = ranking && ranking.length ? ranking : reports.map((r) => r.matcher);
   order.forEach((name) => {
     const r = reports.find((x) => x.matcher === name);
     if (!r) return;
